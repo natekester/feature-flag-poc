@@ -30,8 +30,8 @@ func getEnv(key, fallback string) string {
 
 func main() {
 	port := getEnv("PORT", "8080")
-	ddbEndpoint := getEnv("DYNAMODB_ENDPOINT", "http://dynamodb-local:8000")
-	redisAddr := getEnv("REDIS_ADDR", "redis-local:6379")
+	ddbEndpoint := getEnv("DYNAMODB_ENDPOINT", "http://localhost:8000")
+	redisAddr := getEnv("REDIS_ADDR", "localhost:6379")
 	tableName := getEnv("TABLE_NAME", "FeatureFlags")
 
 	log.Printf("Starting flag-service on :%s (DDB: %s, Redis: %s)...", port, ddbEndpoint, redisAddr)

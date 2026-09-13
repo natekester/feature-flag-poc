@@ -1,0 +1,37 @@
+# Dependencies (all directory levels)
+node_modules/
+**/node_modules/
+.pnpm-store/
+**/.pnpm-store/
+
+# Build & Dist Outputs
+dist/
+**/dist/
+build/
+**/build/
+*.out
+**/*.out
+
+# Go Binaries & Compilations
+flag-server
+**/flag-server
+services/flag-service/flag-server
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Environment & Logs
+.env
+.env.local
+*.log
+**/*.log
+
+# OS & Editor Files
+.DS_Store
+**/.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo

@@ -16,6 +16,12 @@ const FlagContext = createContext<FlagContextType>({
 
 const STORAGE_KEY = 'ds_feature_flags_cache';
 
+const getApiUrl = (path: string): string => {
+  const isCaddyProxy = window.location.port === '' || window.location.port === '80' || window.location.port === '443';
+  const prefix = isCaddyProxy ? '/api' : 'http://localhost:8080/api';
+  return `${prefix}${path.startsWith('/') ? path : '/' + path}`;
+};
+
 export const FeatureFlagProvider: React.FC<{
   children: React.ReactNode;
 }> = ({ children }) => {
@@ -32,8 +38,7 @@ export const FeatureFlagProvider: React.FC<{
   // Fetch flags for current user
   const syncFlags = useCallback(async (targetUid: string) => {
     try {
-      const apiHost = window.location.port === '3001' ? 'http://localhost:8080/api' : '/api';
-      const res = await fetch(`${apiHost}/v1/evaluate?userId=${encodeURIComponent(targetUid)}`);
+      const res = await fetch(getApiUrl(`/v1/evaluate?userId=${encodeURIComponent(targetUid)}`));
       if (res.ok) {
         const data = await res.json();
         setFlags(data);
@@ -54,8 +59,7 @@ export const FeatureFlagProvider: React.FC<{
 
   // Real-time SSE Stream listener for instant 0 CLS updates
   useEffect(() => {
-    const apiHost = window.location.port === '3001' ? 'http://localhost:8080/api' : '/api';
-    const sse = new EventSource(`${apiHost}/v1/stream`);
+    const sse = new EventSource(getApiUrl('/v1/stream'));
 
     sse.onmessage = (event) => {
       try {

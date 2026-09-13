@@ -10,6 +10,12 @@ interface FeatureFlag {
   updatedAt: number;
 }
 
+const getApiUrl = (path: string): string => {
+  const isCaddyProxy = window.location.port === '' || window.location.port === '80' || window.location.port === '443';
+  const prefix = isCaddyProxy ? '/api' : 'http://localhost:8080/api';
+  return `${prefix}${path.startsWith('/') ? path : '/' + path}`;
+};
+
 export default function App() {
   const [flags, setFlags] = useState<FeatureFlag[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,12 +32,14 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      // Calls /api/v1/admin/flags via Caddy gateway or fallback
-      const apiHost = window.location.port === '3000' ? 'http://localhost:8080/api' : '/api';
-      const res = await fetch(`${apiHost}/v1/admin/flags`);
+      const res = await fetch(getApiUrl('/v1/admin/flags'));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      setFlags(data || []);
+      const loadedFlags: FeatureFlag[] = data || [];
+      setFlags(loadedFlags);
+      if (loadedFlags.length > 0 && (!selectedFlag || !loadedFlags.some((f) => f.key === selectedFlag))) {
+        setSelectedFlag(loadedFlags[0].key);
+      }
     } catch (err: any) {
       setError(`Failed to fetch flags: ${err.message}`);
     } finally {
@@ -45,19 +53,25 @@ export default function App() {
 
   const handleSaveOverride = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!targetUserId.trim() || !selectedFlag) return;
+    if (!targetUserId.trim() || !selectedFlag) {
+      alert('Please select a valid feature flag and enter a target user ID.');
+      return;
+    }
 
     setSaving(true);
     setSuccessMessage(null);
     try {
-      const apiHost = window.location.port === '3000' ? 'http://localhost:8080/api' : '/api';
-      const res = await fetch(`${apiHost}/v1/admin/flags/${selectedFlag}/overrides/users/${encodeURIComponent(targetUserId.trim())}`, {
+      const endpoint = getApiUrl(`/v1/admin/flags/${encodeURIComponent(selectedFlag)}/overrides/users/${encodeURIComponent(targetUserId.trim())}`);
+      const res = await fetch(endpoint, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ variation: overrideVariation }),
       });
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP ${res.status}`);
+      }
 
       setSuccessMessage(`Override saved! User '${targetUserId.trim()}' is now assigned to '${overrideVariation}'.`);
       fetchFlags(); // refresh list
