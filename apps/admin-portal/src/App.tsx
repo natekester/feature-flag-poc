@@ -27,7 +27,7 @@ export default function App() {
     setError(null);
     try {
       // Calls /api/v1/admin/flags via Caddy gateway or fallback
-      const apiHost = window.location.port === '3000' ? 'http://localhost:8080' : '/api';
+      const apiHost = window.location.port === '3000' ? 'http://localhost:8080/api' : '/api';
       const res = await fetch(`${apiHost}/v1/admin/flags`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -50,7 +50,7 @@ export default function App() {
     setSaving(true);
     setSuccessMessage(null);
     try {
-      const apiHost = window.location.port === '3000' ? 'http://localhost:8080' : '/api';
+      const apiHost = window.location.port === '3000' ? 'http://localhost:8080/api' : '/api';
       const res = await fetch(`${apiHost}/v1/admin/flags/${selectedFlag}/overrides/users/${encodeURIComponent(targetUserId.trim())}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

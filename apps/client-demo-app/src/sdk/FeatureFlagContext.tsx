@@ -32,7 +32,7 @@ export const FeatureFlagProvider: React.FC<{
   // Fetch flags for current user
   const syncFlags = useCallback(async (targetUid: string) => {
     try {
-      const apiHost = window.location.port === '3001' ? 'http://localhost:8080' : '/api';
+      const apiHost = window.location.port === '3001' ? 'http://localhost:8080/api' : '/api';
       const res = await fetch(`${apiHost}/v1/evaluate?userId=${encodeURIComponent(targetUid)}`);
       if (res.ok) {
         const data = await res.json();
@@ -54,7 +54,7 @@ export const FeatureFlagProvider: React.FC<{
 
   // Real-time SSE Stream listener for instant 0 CLS updates
   useEffect(() => {
-    const apiHost = window.location.port === '3001' ? 'http://localhost:8080' : '/api';
+    const apiHost = window.location.port === '3001' ? 'http://localhost:8080/api' : '/api';
     const sse = new EventSource(`${apiHost}/v1/stream`);
 
     sse.onmessage = (event) => {
