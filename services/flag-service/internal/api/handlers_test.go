@@ -204,3 +204,37 @@ func TestSSEStream_Headers(t *testing.T) {
 	assert.Equal(t, "text/event-stream", w.Header().Get("Content-Type"))
 	assert.Equal(t, "no-cache, no-transform", w.Header().Get("Cache-Control"))
 }
+
+func TestEvaluateUser_IfNoneMatch_304(t *testing.T) {
+	router, _ := setupTestRouter()
+
+	// 1. Initial request to fetch ETag
+	req1, _ := http.NewRequest(http.MethodGet, "/api/v1/evaluate?userId=user_100", nil)
+	w1 := httptest.NewRecorder()
+	router.ServeHTTP(w1, req1)
+	assert.Equal(t, http.StatusOK, w1.Code)
+	etag := w1.Header().Get("ETag")
+	assert.NotEmpty(t, etag)
+
+	// 2. Request with If-None-Match header matching ETag
+	req2, _ := http.NewRequest(http.MethodGet, "/api/v1/evaluate?userId=user_100", nil)
+	req2.Header.Set("If-None-Match", etag)
+	w2 := httptest.NewRecorder()
+	router.ServeHTTP(w2, req2)
+	assert.Equal(t, http.StatusNotModified, w2.Code)
+}
+
+func TestSetUserOverride_EmptyUserId(t *testing.T) {
+	router, _ := setupTestRouter()
+
+	payload := map[string]any{"variation": "v2"}
+	body, _ := json.Marshal(payload)
+	req, _ := http.NewRequest(http.MethodPut, "/api/v1/admin/flags/ds-button-v2/overrides/users/", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.True(t, w.Code == http.StatusNotFound || w.Code == http.StatusBadRequest)
+}
+
