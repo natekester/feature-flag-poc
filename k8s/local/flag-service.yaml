@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flag-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flag-service
+  template:
+    metadata:
+      labels:
+        app: flag-service
+    spec:
+      containers:
+        - name: flag-service
+          image: flag-service
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ENV
+              value: "local"
+            - name: PORT
+              value: "8080"
+            - name: REDIS_ADDR
+              value: "redis-local:6379"
+            - name: DYNAMODB_ENDPOINT
+              value: "http://dynamodb-local:8000"
+            - name: AWS_REGION
+              value: "us-east-1"
+            - name: AWS_ACCESS_KEY_ID
+              value: "dummy"
+            - name: AWS_SECRET_ACCESS_KEY
+              value: "dummy"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flag-service
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080
+  selector:
+    app: flag-service

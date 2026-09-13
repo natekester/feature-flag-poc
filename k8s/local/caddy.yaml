@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: caddy-config
+data:
+  Caddyfile: |
+    :80 {
+        log {
+            output stdout
+            format console
+        }
+
+        # Real-time SSE stream & REST API
+        handle /api/* {
+            reverse_proxy flag-service:8080 {
+                flush_interval -1
+            }
+        }
+
+        # Admin Control Console
+        handle_path /admin* {
+            reverse_proxy admin-portal:3000
+        }
+
+        # Client Demo Application (Default route)
+        handle {
+            reverse_proxy client-demo-app:3001
+        }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: caddy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: caddy
+  template:
+    metadata:
+      labels:
+        app: caddy
+    spec:
+      containers:
+        - name: caddy
+          image: caddy:2.7.6-alpine
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/caddy/Caddyfile
+              subPath: Caddyfile
+      volumes:
+        - name: config-volume
+          configMap:
+            name: caddy-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: caddy
+spec:
+  ports:
+    - port: 80
+      targetPort: 80
+  selector:
+    app: caddy

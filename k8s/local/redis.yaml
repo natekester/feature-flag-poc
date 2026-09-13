@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-local
+  labels:
+    app: redis-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis-local
+  template:
+    metadata:
+      labels:
+        app: redis-local
+    spec:
+      containers:
+        - name: redis
+          image: redis:7.2-alpine
+          args: ["--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-local
+spec:
+  ports:
+    - port: 6379
+      targetPort: 6379
+  selector:
+    app: redis-local
