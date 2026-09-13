@@ -1241,62 +1241,59 @@ type SetOverrideRequest struct {
 
 // SetUserOverride updates a flag's specific user override in DynamoDB and invalidates Redis
 // PUT /api/v1/admin/flags/:key/overrides/users/:userId
-func (h *FlagHandler) SetUserOverride(c *gin.Context) {
-	flagKey := c.Param("key")
-	userID := c.Param("userId")
+func (handler *FlagHandler) SetUserOverride(ginContext *gin.Context) {
+	flagKey := ginContext.Param("key")
+	userID := ginContext.Param("userId")
 
-	var req SetOverrideRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var requestBody SetOverrideRequest
+	if err := ginContext.ShouldBindJSON(&requestBody); err != nil {
+		ginContext.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	pk := "TENANT#acme#ENV#local"
-	sk := fmt.Sprintf("FLAG#%s", flagKey)
+	partitionKey := "TENANT#acme#ENV#local"
+	sortKey := fmt.Sprintf("FLAG#%s", flagKey)
 
-	valAV, err := attributevalue.Marshal(req.Variation)
+	valueAttributeValue, err := attributevalue.Marshal(requestBody.Variation)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "serialization error"})
+		ginContext.JSON(http.StatusInternalServerError, gin.H{"error": "serialization error"})
 		return
 	}
 
 	// 1. Atomically set map key in DynamoDB
-	_, err = h.ddbClient.UpdateItem(context.TODO(), &dynamodb.UpdateItemInput{
-		TableName: aws.String(h.tableName),
+	_, err = handler.ddbClient.UpdateItem(context.TODO(), &dynamodb.UpdateItemInput{
+		TableName: aws.String(handler.tableName),
 		Key: map[string]types.AttributeValue{
-			"PK": &types.AttributeValueMemberS{Value: pk},
-			"SK": &types.AttributeValueMemberS{Value: sk},
+			"PK": &types.AttributeValueMemberS{Value: partitionKey},
+			"SK": &types.AttributeValueMemberS{Value: sortKey},
 		},
 		UpdateExpression: aws.String("SET UserOverrides.#uid = :val, UpdatedAt = :now"),
 		ExpressionAttributeNames: map[string]string{
 			"#uid": userID,
 		},
 		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":val": valAV,
+			":val": valueAttributeValue,
 			":now": &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", time.Now().Unix())},
 		},
 	})
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		ginContext.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	// 2. Invalidate local Redis cache so subsequent reads fetch fresh rules
-	_ = h.cache.Invalidate(c.Request.Context(), "acme", "local")
+	_ = handler.cache.Invalidate(ginContext.Request.Context(), "acme", "local")
 
 	// 3. Broadcast invalidation event over SSE to connected clients
-	eventMsg := fmt.Sprintf(`{"type":"FLAG_OVERRIDE_UPDATED","flagKey":"%s","userId":"%s"}`, flagKey, userID)
-	select {
-	case h.sseChan <- eventMsg:
-	default:
-	}
+	eventMessage := fmt.Sprintf(`{"type":"FLAG_OVERRIDE_UPDATED","flagKey":"%s","userId":"%s"}`, flagKey, userID)
+	handler.broadcastSSE(eventMessage)
 
-	c.JSON(http.StatusOK, gin.H{
+	ginContext.JSON(http.StatusOK, gin.H{
 		"status":    "success",
 		"flagKey":   flagKey,
 		"userId":    userID,
-		"variation": req.Variation,
+		"variation": requestBody.Variation,
 	})
 }
 

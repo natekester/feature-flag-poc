@@ -17,58 +17,58 @@ type CachedRuleset struct {
 }
 
 type RulesetCache struct {
-	rdb *redis.Client
+	redisClient *redis.Client
 }
 
-func NewRulesetCache(redisAddr string) *RulesetCache {
-	rdb := redis.NewClient(&redis.Options{
-		Addr:         redisAddr,
+func NewRulesetCache(redisServerAddress string) *RulesetCache {
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:         redisServerAddress,
 		DialTimeout:  2 * time.Second,
 		ReadTimeout:  1 * time.Second,
 		WriteTimeout: 1 * time.Second,
 		PoolSize:     20,
 	})
-	return &RulesetCache{rdb: rdb}
+	return &RulesetCache{redisClient: redisClient}
 }
 
 // GetRuleset returns cached rules and ETag (<1ms)
-func (c *RulesetCache) GetRuleset(ctx context.Context, tenant, env string) ([]domain.FeatureFlag, string, error) {
-	if c.rdb == nil {
+func (rulesetCache *RulesetCache) GetRuleset(requestContext context.Context, tenantIdentifier, environmentName string) ([]domain.FeatureFlag, string, error) {
+	if rulesetCache.redisClient == nil {
 		return nil, "", nil
 	}
-	key := fmt.Sprintf("ruleset:%s:%s", tenant, env)
-	val, err := c.rdb.Get(ctx, key).Result()
-	if err == redis.Nil {
+	cacheKey := fmt.Sprintf("ruleset:%s:%s", tenantIdentifier, environmentName)
+	rawCachedString, redisError := rulesetCache.redisClient.Get(requestContext, cacheKey).Result()
+	if redisError == redis.Nil {
 		return nil, "", nil // Cache Miss
-	} else if err != nil {
-		return nil, "", err // Redis fail-open to DB
+	} else if redisError != nil {
+		return nil, "", redisError // Redis fail-open to DB
 	}
 
-	var cached CachedRuleset
-	if err := json.Unmarshal([]byte(val), &cached); err != nil {
-		return nil, "", err
+	var cachedRulesetPayload CachedRuleset
+	if unmarshalError := json.Unmarshal([]byte(rawCachedString), &cachedRulesetPayload); unmarshalError != nil {
+		return nil, "", unmarshalError
 	}
-	return cached.Flags, cached.ETag, nil
+	return cachedRulesetPayload.Flags, cachedRulesetPayload.ETag, nil
 }
 
 // SetRuleset populates Redis with compiled flags and computed ETag
-func (c *RulesetCache) SetRuleset(ctx context.Context, tenant, env string, flags []domain.FeatureFlag, etag string) error {
-	if c.rdb == nil {
+func (rulesetCache *RulesetCache) SetRuleset(requestContext context.Context, tenantIdentifier, environmentName string, featureFlags []domain.FeatureFlag, etagHeaderValue string) error {
+	if rulesetCache.redisClient == nil {
 		return nil
 	}
-	key := fmt.Sprintf("ruleset:%s:%s", tenant, env)
-	payload, err := json.Marshal(CachedRuleset{ETag: etag, Flags: flags})
-	if err != nil {
-		return err
+	cacheKey := fmt.Sprintf("ruleset:%s:%s", tenantIdentifier, environmentName)
+	serializedPayloadBytes, marshalError := json.Marshal(CachedRuleset{ETag: etagHeaderValue, Flags: featureFlags})
+	if marshalError != nil {
+		return marshalError
 	}
-	return c.rdb.Set(ctx, key, payload, 24*time.Hour).Err()
+	return rulesetCache.redisClient.Set(requestContext, cacheKey, serializedPayloadBytes, 24*time.Hour).Err()
 }
 
 // Invalidate purges cache when an admin mutates a flag or override
-func (c *RulesetCache) Invalidate(ctx context.Context, tenant, env string) error {
-	if c.rdb == nil {
+func (rulesetCache *RulesetCache) Invalidate(requestContext context.Context, tenantIdentifier, environmentName string) error {
+	if rulesetCache.redisClient == nil {
 		return nil
 	}
-	key := fmt.Sprintf("ruleset:%s:%s", tenant, env)
-	return c.rdb.Del(ctx, key).Err()
+	cacheKey := fmt.Sprintf("ruleset:%s:%s", tenantIdentifier, environmentName)
+	return rulesetCache.redisClient.Del(requestContext, cacheKey).Err()
 }

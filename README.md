@@ -1,5 +1,12 @@
 # Feature Flag Proof of Concept (POC)
 
+![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?style=for-the-badge&logo=go&logoColor=white)
+![React](https://img.shields.io/badge/React-18.x-61DAFB?style=for-the-badge&logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-5.x-646CFF?style=for-the-badge&logo=vite&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-7.x-DC382D?style=for-the-badge&logo=redis&logoColor=white)
+![AWS DynamoDB](https://img.shields.io/badge/Amazon%20DynamoDB-Local-4053D6?style=for-the-badge&logo=amazondynamodb&logoColor=white)
+
 An end-to-end feature flag system with low-latency evaluation, per-person user override targeting, and real-time Server-Sent Events (SSE) updates across clients.
 
 ![Feature Flags Demo](docs/demo.gif)

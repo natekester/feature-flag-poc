@@ -16,40 +16,40 @@ func CalculateBucket(userID string, flagKey string) int {
 }
 
 // Evaluate determines the active variation for a given user context in <0.01ms
-func Evaluate(flag domain.FeatureFlag, ctx domain.EvaluationContext) domain.VariationValue {
-	if !flag.Enabled {
-		return flag.DefaultValue
+func Evaluate(featureFlag domain.FeatureFlag, evaluationContext domain.EvaluationContext) domain.VariationValue {
+	if !featureFlag.Enabled {
+		return featureFlag.DefaultValue
 	}
 
 	// 1. Explicit User-Specific Overrides (Highest Priority for Admin POC)
-	if flag.UserOverrides != nil {
-		if overrideVal, exists := flag.UserOverrides[ctx.UserID]; exists {
-			return overrideVal
+	if featureFlag.UserOverrides != nil {
+		if overrideValue, hasOverride := featureFlag.UserOverrides[evaluationContext.UserID]; hasOverride {
+			return overrideValue
 		}
 	}
 
 	// 2. Targeting Rules (Attribute Matching)
-	for _, rule := range flag.TargetingRules {
-		if val, exists := ctx.Attributes[rule.Attribute]; exists {
-			for _, targetVal := range rule.Values {
-				if val == targetVal {
-					return rule.Variation
+	for _, targetingRule := range featureFlag.TargetingRules {
+		if attributeValue, attributeExists := evaluationContext.Attributes[targetingRule.Attribute]; attributeExists {
+			for _, targetValue := range targetingRule.Values {
+				if attributeValue == targetValue {
+					return targetingRule.Variation
 				}
 			}
 		}
 	}
 
 	// 3. Percentage Rollout Bucketing
-	if len(flag.Rollout) > 0 {
-		bucket := CalculateBucket(ctx.UserID, flag.Key)
-		cumulative := 0
-		for _, variant := range flag.Rollout {
-			cumulative += variant.BucketPercentage
-			if bucket < cumulative {
-				return variant.Variation
+	if len(featureFlag.Rollout) > 0 {
+		userBucketValue := CalculateBucket(evaluationContext.UserID, featureFlag.Key)
+		cumulativeBucketSum := 0
+		for _, rolloutVariant := range featureFlag.Rollout {
+			cumulativeBucketSum += rolloutVariant.BucketPercentage
+			if userBucketValue < cumulativeBucketSum {
+				return rolloutVariant.Variation
 			}
 		}
 	}
 
-	return flag.DefaultValue
+	return featureFlag.DefaultValue
 }

@@ -55,7 +55,7 @@ func TestRulesetCache(t *testing.T) {
 }
 
 func TestNilRulesetCache(t *testing.T) {
-	cache := &RulesetCache{rdb: nil}
+	cache := &RulesetCache{redisClient: nil}
 	ctx := context.Background()
 
 	flags, etag, err := cache.GetRuleset(ctx, "acme", "local")
