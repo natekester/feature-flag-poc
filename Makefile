@@ -35,12 +35,15 @@ dev-admin: ## Run Admin Control Console (Port 3000)
 dev-client: ## Run Client Demo Application (Port 3001)
 	@cd apps/client-demo-app && npm run dev
 
-kill: ## Stop/kill any running dev processes on ports 8080, 3000, and 3001
+kill: ## Stop/kill any running dev processes on ports 8080, 3000, and 3001 and stop containers
 	@echo "--> Clearing ports 8080, 3000, and 3001..."
 	@lsof -ti:8080 -ti:3000 -ti:3001 | xargs kill -9 2>/dev/null || true
 	@pkill -f "go run main.go" 2>/dev/null || true
 	@pkill -f "air" 2>/dev/null || true
-	@echo "--> Ports cleared."
+	@echo "--> Stopping and removing local Docker infrastructure containers..."
+	@docker stop dynamodb-local redis-local 2>/dev/null || true
+	@docker rm dynamodb-local redis-local 2>/dev/null || true
+	@echo "--> Ports and containers cleared."
 
 dev: kill ## Clear ports, start local containers (if Docker daemon is running), and run all services
 	@echo "--> Checking local infrastructure containers..."
