@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,32 +27,41 @@ type FlagHandler struct {
 	ddbClient     *dynamodb.Client
 	tableName     string
 	cache         *cache.RulesetCache
-	sseChan       chan string
+	subscribers   map[chan string]bool
+	subMu         sync.RWMutex
 	inMemoryFlags map[string]domain.FeatureFlag
 	mu            sync.RWMutex
 }
 
 func NewFlagHandler(client *dynamodb.Client, table string, c *cache.RulesetCache) *FlagHandler {
 	defaultFlag := domain.FeatureFlag{
-		Key:          "ds-button-v2",
-		Enabled:      true,
-		DefaultValue: "v1",
-		Rollout: []domain.RolloutVariation{
-			{Variation: "v1", BucketPercentage: 50},
-			{Variation: "v2", BucketPercentage: 50},
-		},
+		Key:           "ds-button-v2",
+		Enabled:       true,
+		DefaultValue:  "v1",
+		Rollout:       nil,
 		UserOverrides: map[string]domain.VariationValue{},
 		UpdatedAt:     time.Now().Unix(),
 	}
 
 	return &FlagHandler{
-		ddbClient: client,
-		tableName: table,
-		cache:     c,
-		sseChan:   make(chan string, 100),
+		ddbClient:   client,
+		tableName:   table,
+		cache:       c,
+		subscribers: make(map[chan string]bool),
 		inMemoryFlags: map[string]domain.FeatureFlag{
 			"ds-button-v2": defaultFlag,
 		},
+	}
+}
+
+func (h *FlagHandler) broadcastSSE(msg string) {
+	h.subMu.RLock()
+	defer h.subMu.RUnlock()
+	for ch := range h.subscribers {
+		select {
+		case ch <- msg:
+		default:
+		}
 	}
 }
 
@@ -74,7 +84,7 @@ func (h *FlagHandler) ListFlags(c *gin.Context) {
 // PUT /api/v1/admin/flags/:key/overrides/users/:userId
 func (h *FlagHandler) SetUserOverride(c *gin.Context) {
 	flagKey := c.Param("key")
-	userID := c.Param("userId")
+	userID := strings.TrimPrefix(c.Param("userId"), "/")
 
 	var req SetOverrideRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -124,17 +134,68 @@ func (h *FlagHandler) SetUserOverride(c *gin.Context) {
 	}
 
 	// Broadcast SSE event
-	eventMsg := fmt.Sprintf(`{"type":"FLAG_OVERRIDE_UPDATED","flagKey":"%s","userId":"%s","variation":%v}`, flagKey, userID, req.Variation)
-	select {
-	case h.sseChan <- eventMsg:
-	default:
-	}
+	varBytes, _ := json.Marshal(req.Variation)
+	eventMsg := fmt.Sprintf(`{"type":"FLAG_OVERRIDE_UPDATED","flagKey":"%s","userId":"%s","variation":%s}`, flagKey, userID, string(varBytes))
+	h.broadcastSSE(eventMsg)
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":    "success",
 		"flagKey":   flagKey,
 		"userId":    userID,
 		"variation": req.Variation,
+	})
+}
+
+// RemoveUserOverride deletes a flag's user override in DynamoDB and invalidates Redis
+// DELETE /api/v1/admin/flags/:key/overrides/users/:userId
+func (h *FlagHandler) RemoveUserOverride(c *gin.Context) {
+	flagKey := c.Param("key")
+	userID := strings.TrimPrefix(c.Param("userId"), "/")
+
+	// Update in-memory cache as fallback
+	h.mu.Lock()
+	if flag, exists := h.inMemoryFlags[flagKey]; exists {
+		if flag.UserOverrides != nil {
+			delete(flag.UserOverrides, userID)
+			flag.UpdatedAt = time.Now().Unix()
+			h.inMemoryFlags[flagKey] = flag
+		}
+	}
+	h.mu.Unlock()
+
+	pk := "TENANT#acme#ENV#local"
+	sk := fmt.Sprintf("FLAG#%s", flagKey)
+
+	if h.ddbClient != nil {
+		_, _ = h.ddbClient.UpdateItem(context.TODO(), &dynamodb.UpdateItemInput{
+			TableName: aws.String(h.tableName),
+			Key: map[string]types.AttributeValue{
+				"PK": &types.AttributeValueMemberS{Value: pk},
+				"SK": &types.AttributeValueMemberS{Value: sk},
+			},
+			UpdateExpression: aws.String("REMOVE UserOverrides.#uid SET UpdatedAt = :now"),
+			ExpressionAttributeNames: map[string]string{
+				"#uid": userID,
+			},
+			ExpressionAttributeValues: map[string]types.AttributeValue{
+				":now": &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", time.Now().Unix())},
+			},
+		})
+	}
+
+	// Invalidate local Redis cache if available
+	if h.cache != nil {
+		_ = h.cache.Invalidate(c.Request.Context(), "acme", "local")
+	}
+
+	// Broadcast SSE event
+	eventMsg := fmt.Sprintf(`{"type":"FLAG_OVERRIDE_REMOVED","flagKey":"%s","userId":"%s"}`, flagKey, userID)
+	h.broadcastSSE(eventMsg)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"flagKey": flagKey,
+		"userId":  userID,
 	})
 }
 
@@ -177,20 +238,39 @@ func (h *FlagHandler) EvaluateUser(c *gin.Context) {
 // GET /api/v1/stream
 func (h *FlagHandler) SSEStream(c *gin.Context) {
 	c.Writer.Header().Set("Content-Type", "text/event-stream")
-	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("Cache-Control", "no-cache, no-transform")
 	c.Writer.Header().Set("Connection", "keep-alive")
+	c.Writer.Header().Set("X-Accel-Buffering", "no")
 	c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// Flush HTTP headers and initial connection ping immediately
+	c.Writer.WriteString(":connected\n\n")
+	c.Writer.Flush()
+
+	clientChan := make(chan string, 10)
+
+	h.subMu.Lock()
+	h.subscribers[clientChan] = true
+	h.subMu.Unlock()
+
+	defer func() {
+		h.subMu.Lock()
+		delete(h.subscribers, clientChan)
+		h.subMu.Unlock()
+		close(clientChan)
+	}()
 
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 
 	c.Stream(func(w io.Writer) bool {
 		select {
-		case msg, ok := <-h.sseChan:
+		case msg, ok := <-clientChan:
 			if !ok {
 				return false
 			}
-			c.SSEvent("message", msg)
+			fmt.Fprintf(w, "data: %s\n\n", msg)
+			c.Writer.Flush()
 			return true
 		case <-ticker.C:
 			// Heartbeat comment ping
@@ -217,8 +297,10 @@ func (h *FlagHandler) getOrFetchFlags(ctx context.Context, tenant, env string) (
 
 	// Single-Table DynamoDB Query if client is initialized
 	if h.ddbClient != nil {
+		dbCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+		defer cancel()
 		pk := fmt.Sprintf("TENANT#%s#ENV#%s", tenant, env)
-		out, err := h.ddbClient.Query(ctx, &dynamodb.QueryInput{
+		out, err := h.ddbClient.Query(dbCtx, &dynamodb.QueryInput{
 			TableName:              aws.String(h.tableName),
 			KeyConditionExpression: aws.String("PK = :pk AND begins_with(SK, :skPrefix)"),
 			ExpressionAttributeValues: map[string]types.AttributeValue{

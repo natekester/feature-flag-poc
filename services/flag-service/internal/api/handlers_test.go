@@ -42,6 +42,7 @@ func setupTestRouter() (*gin.Engine, *api.FlagHandler) {
 	{
 		apiGroup.GET("/admin/flags", handler.ListFlags)
 		apiGroup.PUT("/admin/flags/:key/overrides/users/:userId", handler.SetUserOverride)
+		apiGroup.DELETE("/admin/flags/:key/overrides/users/:userId", handler.RemoveUserOverride)
 		apiGroup.GET("/evaluate", handler.EvaluateUser)
 		apiGroup.GET("/stream", handler.SSEStream)
 	}
@@ -108,6 +109,35 @@ func TestSetUserOverride_BadRequest(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
+func TestRemoveUserOverride_Success(t *testing.T) {
+	router, _ := setupTestRouter()
+
+	// 1. Set override
+	payload := map[string]any{"variation": "v2"}
+	body, _ := json.Marshal(payload)
+	req1, _ := http.NewRequest(http.MethodPut, "/api/v1/admin/flags/ds-button-v2/overrides/users/user_42", bytes.NewBuffer(body))
+	req1.Header.Set("Content-Type", "application/json")
+	w1 := httptest.NewRecorder()
+	router.ServeHTTP(w1, req1)
+	assert.Equal(t, http.StatusOK, w1.Code)
+
+	// 2. Remove override
+	req2, err := http.NewRequest(http.MethodDelete, "/api/v1/admin/flags/ds-button-v2/overrides/users/user_42", nil)
+	require.NoError(t, err)
+
+	w2 := httptest.NewRecorder()
+	router.ServeHTTP(w2, req2)
+
+	assert.Equal(t, http.StatusOK, w2.Code)
+
+	var resp map[string]any
+	err = json.Unmarshal(w2.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	assert.Equal(t, "success", resp["status"])
+	assert.Equal(t, "ds-button-v2", resp["flagKey"])
+	assert.Equal(t, "user_42", resp["userId"])
+}
+
 func TestEvaluateUser_Success(t *testing.T) {
 	router, _ := setupTestRouter()
 
@@ -172,5 +202,5 @@ func TestSSEStream_Headers(t *testing.T) {
 	w.closed <- true
 
 	assert.Equal(t, "text/event-stream", w.Header().Get("Content-Type"))
-	assert.Equal(t, "no-cache", w.Header().Get("Cache-Control"))
+	assert.Equal(t, "no-cache, no-transform", w.Header().Get("Cache-Control"))
 }

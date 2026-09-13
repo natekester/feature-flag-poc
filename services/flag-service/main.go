@@ -37,8 +37,11 @@ func main() {
 	log.Printf("Starting flag-service on :%s (DDB: %s, Redis: %s)...", port, ddbEndpoint, redisAddr)
 
 	// AWS SDK Config for DynamoDB Local
+	httpClient := &http.Client{Timeout: 1 * time.Second}
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion("us-east-1"),
+		config.WithHTTPClient(httpClient),
+		config.WithRetryMaxAttempts(1),
 		config.WithEndpointResolverWithOptions(aws.EndpointResolverWithOptionsFunc(
 			func(service, region string, options ...interface{}) (aws.Endpoint, error) {
 				return aws.Endpoint{URL: ddbEndpoint}, nil
@@ -72,7 +75,8 @@ func main() {
 	apiGroup := router.Group("/api/v1")
 	{
 		apiGroup.GET("/admin/flags", handler.ListFlags)
-		apiGroup.PUT("/admin/flags/:key/overrides/users/:userId", handler.SetUserOverride)
+		apiGroup.PUT("/admin/flags/:key/overrides/users/*userId", handler.SetUserOverride)
+		apiGroup.DELETE("/admin/flags/:key/overrides/users/*userId", handler.RemoveUserOverride)
 		apiGroup.GET("/evaluate", handler.EvaluateUser)
 		apiGroup.GET("/stream", handler.SSEStream)
 	}

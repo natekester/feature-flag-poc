@@ -54,8 +54,10 @@ function DesignSystemShowcase() {
             <h2 style={styles.compTitle}>Component: &lt;Button /&gt;</h2>
             <span style={styles.flagMeta}>Flag Key: <code>ds-button-v2</code></span>
           </div>
-          <div style={styles.activeVariantBadge}>
-            Active Variant: <strong>{buttonVariant}</strong>
+          <div style={styles.badgeGroup}>
+            <div style={styles.activeVariantBadge}>
+              Active Variant: <strong>{buttonVariant}</strong>
+            </div>
           </div>
         </div>
 
@@ -81,6 +83,14 @@ function DesignSystemShowcase() {
           )}
         </div>
 
+        <div style={styles.evalInfoBox}>
+          <Sparkles size={14} color="#38bdf8" />
+          <span>
+            Evaluation Rule: <strong>{userId}</strong> evaluates to <code>"{buttonVariant}"</code>.
+            {buttonVariant !== 'v1' ? ' (Assigned via Specific User Override)' : ' (Default Base Variant)'}
+          </span>
+        </div>
+
         <div style={styles.codeSnippet}>
           <code>
             {`// Zero-CLS React Component Usage\nconst variant = useFeatureFlag('ds-button-v2', 'v1');\n<Button variant="${buttonVariant}" />`}
@@ -103,11 +113,13 @@ const styles: Record<string, React.CSSProperties> = {
   showcase: {
     maxWidth: '900px',
     margin: '0 auto',
-    padding: '40px 24px',
+    padding: '24px 16px',
+    boxSizing: 'border-box',
+    width: '100%',
   },
   header: {
     textAlign: 'center',
-    marginBottom: '36px',
+    marginBottom: '28px',
   },
   badge: {
     display: 'inline-flex',
@@ -121,24 +133,29 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '13px',
     fontWeight: 600,
     marginBottom: '16px',
+    maxWidth: '100%',
+    boxSizing: 'border-box',
   },
   title: {
     margin: 0,
-    fontSize: '28px',
+    fontSize: 'clamp(20px, 5vw, 28px)',
     fontWeight: 700,
     color: '#f8fafc',
+    lineHeight: '1.2',
   },
   subtitle: {
     margin: '8px 0 0 0',
-    fontSize: '14px',
+    fontSize: 'clamp(12px, 3.5vw, 14px)',
     color: '#94a3b8',
+    lineHeight: '1.4',
   },
   userCard: {
     background: '#0f172a',
     border: '1px solid #1e293b',
     borderRadius: '16px',
-    padding: '20px',
-    marginBottom: '24px',
+    padding: '16px',
+    marginBottom: '20px',
+    boxSizing: 'border-box',
   },
   userCardHeader: {
     display: 'flex',
@@ -152,9 +169,9 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#f8fafc',
   },
   userSelector: {
-    display: 'flex',
-    gap: '10px',
-    flexWrap: 'wrap',
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+    gap: '8px',
     marginBottom: '12px',
   },
   userBtn: {
@@ -162,11 +179,16 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#94a3b8',
     border: '1px solid #334155',
     borderRadius: '8px',
-    padding: '8px 14px',
+    padding: '10px 12px',
     cursor: 'pointer',
     fontSize: '13px',
     fontWeight: 500,
     transition: 'all 0.2s ease',
+    textOverflow: 'ellipsis',
+    overflow: 'hidden',
+    whiteSpace: 'nowrap',
+    width: '100%',
+    boxSizing: 'border-box',
   },
   activeUserBtn: {
     background: '#0284c7',
@@ -176,26 +198,29 @@ const styles: Record<string, React.CSSProperties> = {
   },
   sseStatus: {
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: '8px',
     fontSize: '12px',
     color: '#94a3b8',
+    lineHeight: '1.4',
+    wordBreak: 'break-word',
   },
   componentCard: {
     background: '#0f172a',
     border: '1px solid #1e293b',
     borderRadius: '16px',
-    padding: '28px',
+    padding: '20px',
+    boxSizing: 'border-box',
   },
   compHeader: {
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: '24px',
+    flexDirection: 'column',
+    gap: '12px',
+    marginBottom: '20px',
   },
   compTitle: {
     margin: 0,
-    fontSize: '20px',
+    fontSize: 'clamp(16px, 4vw, 20px)',
     fontWeight: 700,
     color: '#f8fafc',
   },
@@ -204,6 +229,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#94a3b8',
   },
   activeVariantBadge: {
+    alignSelf: 'flex-start',
     background: 'rgba(245, 158, 11, 0.15)',
     color: '#fbbf24',
     border: '1px solid rgba(245, 158, 11, 0.3)',
@@ -215,35 +241,43 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#020617',
     border: '1px dashed #334155',
     borderRadius: '12px',
-    padding: '48px 24px',
+    padding: '32px 16px',
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: '24px',
-    minHeight: '120px',
+    marginBottom: '20px',
+    minHeight: '100px',
+    boxSizing: 'border-box',
+    width: '100%',
+    overflowX: 'auto',
   },
   btnV1: {
     background: '#334155',
     color: '#f8fafc',
     border: 'none',
     borderRadius: '6px',
-    padding: '12px 24px',
+    padding: '12px 20px',
     fontSize: '14px',
     cursor: 'pointer',
+    maxWidth: '100%',
+    wordBreak: 'break-word',
   },
   btnV2: {
     background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
     color: '#ffffff',
     border: 'none',
     borderRadius: '12px',
-    padding: '14px 28px',
-    fontSize: '15px',
+    padding: '12px 20px',
+    fontSize: '14px',
     fontWeight: 600,
     display: 'flex',
     alignItems: 'center',
-    gap: '10px',
+    justifyContent: 'center',
+    gap: '8px',
     boxShadow: '0 8px 20px -4px rgba(37, 99, 235, 0.5)',
     cursor: 'pointer',
+    maxWidth: '100%',
+    textAlign: 'center',
   },
   btnCompact: {
     background: '#10b981',
@@ -259,10 +293,24 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#020617',
     border: '1px solid #1e293b',
     borderRadius: '8px',
-    padding: '16px',
+    padding: '14px',
     fontFamily: 'monospace',
     color: '#38bdf8',
-    fontSize: '13px',
+    fontSize: '12px',
     whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+    overflowX: 'auto',
+  },
+  evalInfoBox: {
+    background: 'rgba(15, 23, 42, 0.8)',
+    border: '1px solid #334155',
+    borderRadius: '8px',
+    padding: '10px 14px',
+    marginBottom: '16px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    fontSize: '12px',
+    color: '#cbd5e1',
   },
 };

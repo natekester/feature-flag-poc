@@ -26,8 +26,8 @@ make install
 
 ### Direct Component Commands
 ```bash
-# Go Backend (Port 8080)
-cd services/flag-service && go run main.go
+# Go Backend (Port 8080) with Air live reload (or fallback to go run)
+cd services/flag-service && (air || go run main.go)
 
 # Admin Control Console (Port 3000)
 cd apps/admin-portal && npm run dev

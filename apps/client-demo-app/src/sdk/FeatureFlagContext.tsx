@@ -112,3 +112,49 @@ export const FeatureFlag: React.FC<{
   const isEnabled = useFeatureFlag(flag, false);
   return <>{isEnabled ? children : fallback}</>;
 };
+
+if (import.meta.vitest) {
+  const { describe, it, expect, vi, beforeEach } = import.meta.vitest;
+  const { renderHook, act } = await import('@testing-library/react');
+
+  describe('FeatureFlagContext SDK', () => {
+    beforeEach(() => {
+      localStorage.clear();
+      vi.restoreAllMocks();
+
+      // Mock EventSource
+      global.EventSource = vi.fn().mockImplementation(() => ({
+        onmessage: null,
+        close: vi.fn(),
+      })) as any;
+    });
+
+    it('returns default fallback when flag is not loaded', () => {
+      const wrapper = ({ children }: { children: React.ReactNode }) => (
+        <FeatureFlagProvider>{children}</FeatureFlagProvider>
+      );
+
+      const { result } = renderHook(() => useFeatureFlag('ds-button-v2', 'v1'), { wrapper });
+      expect(result.current).toBe('v1');
+    });
+
+    it('syncs flags from evaluate endpoint and updates context', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ 'ds-button-v2': 'v2' }),
+      });
+
+      const wrapper = ({ children }: { children: React.ReactNode }) => (
+        <FeatureFlagProvider>{children}</FeatureFlagProvider>
+      );
+
+      const { result } = renderHook(() => useFeatureFlag('ds-button-v2', 'v1'), { wrapper });
+
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 50));
+      });
+
+      expect(result.current).toBe('v2');
+    });
+  });
+}
